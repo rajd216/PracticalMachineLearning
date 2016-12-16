@@ -1,0 +1,107 @@
+---
+title: "Predictive Assignment WriteUp"
+output: html_document
+author: RajeshD
+date: '`r format(Sys.Date(), "%d %B, %Y")`'
+---
+
+### Background and Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. 
+These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+
+The main goal of the project is to predict the manner in which those 6 participants performed some exercise as described below. In this project, the goal is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They are asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+This is the "classe" variable in the training set. And the machine learning algorithm described is applied to the 20 test cases available in the test data and the predictions are submitted in appropriate format to the Course Project Prediction Quiz for automated grading.
+
+The packages used in this report are: knitr, caret, randomForest, gbm.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(plyr)
+library(dplyr)
+library(caret)
+library(randomForest)
+library(gbm)
+```
+
+### Reading & getting data and data Processing
+
+The next step is getting data and processing the datasets from the URLs provided in the instructions. Two data sets are available as training set and a test set. The training dataset will be partinioned into two to create a Training set of 75% of the data for the modeling process and a Test dataset of remaining 25% of the data for the validations. The test dataset will only be used for the quiz results generation.
+
+```{r}
+traincsv <- "pml-traininig.csv"
+trainData <- read.csv(traincsv, header = T, na.strings = c("NA", "#DIV/0!"))
+
+testcsv <- "pml-testing.csv"
+testData  <- read.csv(testcsv, header = T, na.strings = c("NA", "#DIV/0!"))
+```
+
+### creating a partition using caret package with the training dataset of 75:25 ratio
+
+```{r}
+trainPartition  <- createDataPartition(trainData$classe, p = 0.75, list = FALSE)
+trainSet <- trainData[trainPartition, ]
+testSet  <- trainData[-trainPartition, ]
+dim(trainSet)
+dim(testSet)
+```
+
+### Cleaning / excluding NAs' and removing user information or identification for first 8 columns.
+
+```{r}
+rmNA    <- sapply(trainSet, function(x) mean(is.na(x)))
+trainSet <- trainSet[, rmNA == FALSE]
+testSet  <- testSet[, rmNA == FALSE]
+dim(trainSet)
+dim(testSet)
+
+trainSet <- trainSet[, -(1:8)]
+testSet  <- testSet[, -(1:8)]
+dim(trainSet)
+dim(testSet)
+```
+
+### Prediction Modeling
+#### Random Forests
+Using cross-validation random forest trees are generated for the training dataset. The generated algorithm is examnined for the partitioned training dataset to identify the estimated error of prediction and accuracy.
+
+```{r}
+set.seed(356)
+rfFit <- train(classe ~ ., method = "rf", importance = T, data = trainSet, trControl = trainControl(method = "cv", number = 5))
+rfFit
+
+predictRF <- predict(rfFit, newdata = testSet)
+confusionMatrix(predictRF, testSet$classe)
+```
+
+With the 51 predictors using cross-validation at a 5-fold an accuracy of 0.9941 with a 95% CI [0.9915 - 0.996] is achieved accompanied by a Kappa value of 0.9925.
+
+### Boosting model
+Generalized Boosting model (GBM) algorithm and 5 -fold cross validation to predict "classe" and compare with all other predictors.
+
+```{r}
+set.seed(301)
+fitBoost <- train(classe ~ ., method = "gbm", data = trainSet, verbose = F, trControl = trainControl(method = "cv", number = 5))
+fitBoost
+
+gbmPredict <- predict(fitBoost, newdata = testSet)
+cmGbm <- confusionMatrix(gbmPredict, testSet$classe)
+cmGbm
+```
+
+With the 51 predictors of 5 classes using cross-validation at a 5-fold an accuracy of 0.96 with a 95% CI [0.9542 - 0.9653] is achieved accompanied by a Kappa value of 0.9494.
+
+So based on the above accuracies, The accuracy of the above two regression models are:
+
+Random Forest is 0.9941 AND Boosting Model is 0.96
+
+Therefore the Random Forest model will be applied to predict the 20 quiz results, that is on the test dataset.
+
+### Applying the Random Forest model to the Test Data
+
+```{r}
+TEST_predict <- predict(rfFit, newdata = testData)
+TEST_predict
+```
